@@ -145,6 +145,12 @@ public class PrefabStageCanvasSizeEditor : Editor
 
 	public override void OnInspectorGUI()
 	{
+		EditorGUILayout.HelpBox(
+			"This component drives environment canvas size and unties it " +
+			"from Game View size. It is added/removed automatically when " +
+			"you open/close prefab and makes no changes to it.",
+			MessageType.Info);
+
 		var resizer = (Resizer)target;
 
 		serializedObject.Update();
