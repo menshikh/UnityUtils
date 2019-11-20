@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 
+using System;
 using UnityEditor;
 using UnityEditor.Experimental.SceneManagement;
 using UnityEngine;
@@ -20,28 +21,27 @@ static class PrefabStageCanvasSize
 
 		PrefabStage.prefabStageOpened += stage =>
 		{
-			// the first rect transform is attached to environment game object
-			var envRect = stage.stageHandle.FindComponentOfType<RectTransform>();
-			if (envRect == null)
+			// get RectTranform of prefab environment
+			var envRT = stage.prefabContentsRoot.transform.parent as RectTransform;
+			if (envRT == null)
 				return; // non UI prefab
-
-			var envCanvas = envRect.GetComponent<Canvas>();
 
 			// although add/destroy of components is not prohibited
 			// for environment game object, but it's not editable in inspector,
 			// so we add component to root game object of prefab
 			var resizer = stage.prefabContentsRoot.AddComponent<Resizer>();
-			resizer.Init(envRect, envCanvas);
 
 			// to be sure it won't be saved in anyways
 			resizer.hideFlags = HideFlags.DontSave;
+
+			resizer.Init(envRT, envRT.GetComponent<Canvas>());
 		};
 
 		PrefabStage.prefabStageClosing += stage =>
 		{
 			// destroy component to avoid memory leaks when using DontSave flags
 			var resizer = stage.prefabContentsRoot.GetComponent<Resizer>();
-			Object.DestroyImmediate(resizer);
+			UnityEngine.Object.DestroyImmediate(resizer);
 		};
 	}
 
@@ -54,7 +54,7 @@ static class PrefabStageCanvasSize
 	{
 		// change default values if needed
 		public Vector2 ReferenceSize = new Vector2(1920, 1080);
-		public Mode CanvasSizeMode = Mode.HeightFollowsGameViewAspect;
+		public Mode CanvasSizeMode = Mode.ExpandUsingGameViewAspect;
 
 		public bool isInitialized { get; private set; }
 
@@ -63,6 +63,7 @@ static class PrefabStageCanvasSize
 			ReferenceSize,
 			HeightFollowsGameViewAspect,
 			WidthFollowsGameViewAspect,
+			ExpandUsingGameViewAspect,
 			NativeBehaviour
 		}
 
@@ -112,10 +113,34 @@ static class PrefabStageCanvasSize
 			var game = Handles.GetMainGameViewSize();
 			var size = ReferenceSize;
 
-			if (CanvasSizeMode == Mode.HeightFollowsGameViewAspect)
-				size.y = size.x * game.y / game.x;
-			else
-				size.x = size.y * game.x / game.y;
+			switch (CanvasSizeMode)
+			{
+				case Mode.ExpandUsingGameViewAspect:
+				{
+					ReferenceSize.x = Math.Max(ReferenceSize.x, 10);
+					ReferenceSize.y = Math.Max(ReferenceSize.y, 10);
+
+					float refAspect = ReferenceSize.x / ReferenceSize.y;
+					float gameAspect = game.x / game.y;
+
+					if (refAspect < gameAspect)
+						size.x *= gameAspect / refAspect;
+					else
+						size.y *= refAspect / gameAspect;
+				}
+				break;
+
+				case Mode.HeightFollowsGameViewAspect:
+					size.y = size.x * game.y / game.x;
+					break;
+
+				case Mode.WidthFollowsGameViewAspect:
+					size.x = size.y * game.x / game.y;
+					break;
+
+				default:
+					throw new NotImplementedException(CanvasSizeMode.ToString());
+			}
 
 			_envRect.sizeDelta = size;
 		}
